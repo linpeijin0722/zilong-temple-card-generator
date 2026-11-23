@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="台北子龍廟祭改替身與安燈小卡線上產生器" />
+  <title>台北子龍廟｜圖卡產生器</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="hero">
+    <div class="brand-mark">龍</div>
+    <div>
+      <p class="eyebrow">台北子龍廟</p>
+      <h1>線上圖卡產生器</h1>
+      <p class="subtitle">免安裝程式，直接讀取公開試算表並下載成品 ZIP</p>
+    </div>
+  </header>
+
+  <main>
+    <nav class="tabs" aria-label="選擇產生器">
+      <button class="tab active" data-tab="substitute">祭改替身</button>
+      <button class="tab" data-tab="lamp">安燈小卡</button>
+    </nav>
+
+    <section class="panel active" id="panel-substitute">
+      <div class="panel-head">
+        <div>
+          <span class="badge">直式 562 × 1474</span>
+          <h2>祭改替身產生器</h2>
+          <p>讀取男、女工作表，依性別套用底圖。已存在的檔名可自動略過。</p>
+        </div>
+        <div class="icon-card">替</div>
+      </div>
+      <div class="form-grid">
+        <label class="field">
+          <span>男替身底圖</span>
+          <input type="file" id="sub-male-template" accept="image/*" />
+          <small>預設已內建，可選擇其他圖片覆蓋</small>
+        </label>
+        <label class="field">
+          <span>女替身底圖</span>
+          <input type="file" id="sub-female-template" accept="image/*" />
+          <small>預設已內建，可選擇其他圖片覆蓋</small>
+        </label>
+      </div>
+      <label class="folder-field">
+        <span>匯入既有輸出資料夾（選填）</span>
+        <input type="file" id="sub-existing" webkitdirectory multiple />
+        <small>網站只比對檔名，不會上傳檔案內容</small>
+      </label>
+      <div class="actions">
+        <button class="secondary" data-action="test" data-type="substitute">測試資料</button>
+        <button class="primary" data-action="generate-changed" data-type="substitute">僅生成異動資料</button>
+        <button class="secondary warning" data-action="generate-all" data-type="substitute">重新產生全部資料</button>
+      </div>
+      <div class="status" id="status-substitute" aria-live="polite">尚未執行</div>
+    </section>
+
+    <section class="panel" id="panel-lamp">
+      <div class="panel-head">
+        <div>
+          <span class="badge">正方形 600 × 600</span>
+          <h2>安燈小卡產生器</h2>
+          <p>讀取六種燈別（不含植福功德燈），依燈種分資料夾下載。</p>
+        </div>
+        <div class="icon-card">燈</div>
+      </div>
+      <label class="field wide">
+        <span>安燈小卡底圖</span>
+        <input type="file" id="lamp-template" accept="image/*" />
+        <small>預設已內建，可選擇其他圖片覆蓋</small>
+      </label>
+      <label class="folder-field">
+        <span>匯入既有輸出資料夾（選填）</span>
+        <input type="file" id="lamp-existing" webkitdirectory multiple />
+        <small>網站只比對檔名，不會上傳檔案內容</small>
+      </label>
+      <div class="actions">
+        <button class="secondary" data-action="test" data-type="lamp">測試資料</button>
+        <button class="primary" data-action="generate-changed" data-type="lamp">僅生成異動資料</button>
+        <button class="secondary warning" data-action="generate-all" data-type="lamp">重新產生全部資料</button>
+      </div>
+      <div class="status" id="status-lamp" aria-live="polite">尚未執行</div>
+    </section>
+
+    <section class="privacy-note">
+      <strong>資料處理說明</strong>
+      <p>網站只讀取公開 Google 試算表，不修改試算表。圖片在使用者瀏覽器內產生，Vercel 伺服器不儲存姓名、地址或成品。</p>
+    </section>
+  </main>
+
+  <footer>台北子龍廟｜線上圖卡工具</footer>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
