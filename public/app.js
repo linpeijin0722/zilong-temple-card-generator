@@ -10,7 +10,10 @@ const CONFIG = {
   }
 };
 
-const PERMISSION_URL = "https://docs.google.com/spreadsheets/d/1rthGYkz-Z9Kgpra5ued65WeZbfiEc-tQ8Swba7x6vCU/edit?pli=1&gid=1762984475#gid=1762984475";
+const PERMISSION_URLS = {
+  substitute: "https://docs.google.com/spreadsheets/d/1rthGYkz-Z9Kgpra5ued65WeZbfiEc-tQ8Swba7x6vCU/edit?pli=1&gid=0#gid=0",
+  lamp: "https://docs.google.com/spreadsheets/d/1RqkwLY3HTO6NsdKiSaCsxRDFHBzSYkUJ8IbA8KpB10E/edit?gid=0#gid=0"
+};
 const TEMPLATE_CONFIG = {
   "sub-male": { label: "男替身底圖", defaultUrl: "/assets/男替身底圖.jpg" },
   "sub-female": { label: "女替身底圖", defaultUrl: "/assets/女替身底圖.jpg" },
@@ -139,7 +142,13 @@ function shiftedSubstituteCanvas(image) {
 }
 
 function substituteTokens(text) {
-  return String(text || "").match(/\d+|[A-Za-z]|\s+|[^\dA-Za-z\s]/gu) || [];
+  return String(text || "").match(/[A-Za-z]?\d+(?:-\d+)*|[A-Za-z]|\s+|[^\dA-Za-z\s]/gu) || [];
+}
+
+function isEnglishAddress(text) {
+  const latin = (String(text).match(/[A-Za-z]/g) || []).length;
+  const han = (String(text).match(/[\p{Script=Han}]/gu) || []).length;
+  return latin >= 4 && latin > han;
 }
 
 function drawVerticalSubstitute(canvas, text, centerX, topY, bottomY, requestedSize = 56) {
@@ -165,7 +174,7 @@ function drawVerticalSubstitute(canvas, text, centerX, topY, bottomY, requestedS
     }
     let tokenSize = size;
     ctx.font = `400 ${tokenSize}px "Noto Sans TC", sans-serif`;
-    while (/^\d+$/.test(part) && tokenSize > 16 && ctx.measureText(part).width > 86) {
+    while (/^[A-Za-z]?\d+(?:-\d+)*$/.test(part) && tokenSize > 16 && ctx.measureText(part).width > 86) {
       tokenSize--; ctx.font = `400 ${tokenSize}px "Noto Sans TC", sans-serif`;
     }
     const metrics = ctx.measureText(part), width = metrics.width;
@@ -265,7 +274,7 @@ async function renderSubstitute(row, gender, template) {
   ctx.fillText(numberText, 281, 58);
   drawSubstituteName(canvas, name);
   drawVerticalSubstitute(canvas, `農：${String(row["農曆生日"] || "").replace(/\s+/g, "")}${hour ? `(${hour})` : ""}`, 62, 140, 1225, 56);
-  if (/[A-Za-z]/.test(rawAddress)) {
+  if (isEnglishAddress(rawAddress)) {
     drawVerticalSubstitute(canvas, "地址：", 500, 140, 330, 56);
     drawRotatedSubstituteLine(canvas, rawAddress, 500, 315, 1050, 44);
   } else {
@@ -330,9 +339,9 @@ function selectedSheets(type) {
   return $$('input[name="lamp-sheet"]:checked').map(input => input.value);
 }
 
-function showGenerationComplete(message) {
+function showGenerationComplete(type, message) {
   if (confirm(`${message}\n\n是否要前往 Google 試算表關閉公開權限？`)) {
-    window.open(PERMISSION_URL, "_blank", "noopener,noreferrer");
+    window.location.assign(PERMISSION_URLS[type]);
   }
 }
 
@@ -356,9 +365,9 @@ async function run(type, mode) {
       if(mode==="changed" && (previous===signature || (!previous && hasExisting(existing,key,filename)))){skipped++;continue;}
       try{let data;if(type==="substitute"){const gender=group.sheet.includes("男")?"男":"女";data=await renderSubstitute(row,gender,templates[gender]);}else data=await renderLamp(row,group.sheet,templates.lamp);files.push({name:key,data});records[key]=signature;status.textContent=`正在產生圖片… ${files.length} 張`;await new Promise(r=>setTimeout(r,0));}catch(error){failed++;console.error(error);}
     }}
-    if(!files.length){status.className="status success";status.textContent=`沒有新圖片需要產生；略過 ${skipped} 張。`;showGenerationComplete("檢查完成，沒有新圖片需要產生。");return;}
+    if(!files.length){status.className="status success";status.textContent=`沒有新圖片需要產生；略過 ${skipped} 張。`;showGenerationComplete(type,"檢查完成，沒有新圖片需要產生。");return;}
     download(makeZip(files),`${type==='substitute'?'祭改替身':'安燈小卡'}_${new Date().toISOString().slice(0,10)}.zip`);saveHistory(type,records);status.className="status success";status.textContent=`完成：下載 ${files.length} 張，略過 ${skipped} 張，失敗 ${failed} 張。`;
-    showGenerationComplete(`已成功生成 ${files.length} 張圖片。`);
+    showGenerationComplete(type,`已成功生成 ${files.length} 張圖片。`);
   } catch(error){status.className="status error";status.textContent=`執行失敗：${error.message}`;}
   finally{buttons.forEach(b=>b.disabled=false);}
 }
@@ -377,3 +386,7 @@ Object.keys(TEMPLATE_CONFIG).forEach(key => {
   });
 });
 $("#template-preview .dialog-close").addEventListener("click", () => $("#template-preview").close());
+$$('[data-permission]').forEach(button => button.addEventListener('click', () => {
+  const type = button.dataset.permissionType;
+  window.open(PERMISSION_URLS[type], '_blank', 'noopener,noreferrer');
+}));
