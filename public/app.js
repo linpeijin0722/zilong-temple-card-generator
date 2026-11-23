@@ -1,13 +1,22 @@
 const CONFIG = {
   substitute: {
     sheets: ["特別祭改 【男】", "特別祭改 【女】"],
-    required: ["姓名", "農曆生日", "出生時辰", "地址", "編號"]
+    required: ["姓名", "農曆生日", "出生時辰", "地址", "編號"],
+    optional: ["備註"]
   },
   lamp: {
     sheets: ["安太歲", "平安燈", "光明燈", "文昌燈", "開運燈", "姻緣燈"],
     required: ["姓名", "性別", "地址", "生肖", "國曆生日", "農曆生日", "出生時辰", "編號"]
   }
 };
+
+const PERMISSION_URL = "https://docs.google.com/spreadsheets/d/1rthGYkz-Z9Kgpra5ued65WeZbfiEc-tQ8Swba7x6vCU/edit?pli=1&gid=1762984475#gid=1762984475";
+const TEMPLATE_CONFIG = {
+  "sub-male": { label: "男替身底圖", defaultUrl: "/assets/男替身底圖.jpg" },
+  "sub-female": { label: "女替身底圖", defaultUrl: "/assets/女替身底圖.jpg" },
+  lamp: { label: "安燈小卡底圖", defaultUrl: "/assets/安燈小卡底圖.jpg" }
+};
+const templateSession = {};
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -48,7 +57,8 @@ async function fetchRows(type, sheet) {
   const headerIndex = rows.slice(0, 30).findIndex(row => required.every(key => row.map(normalizeHeader).includes(key)));
   if (headerIndex < 0) throw new Error(`${sheet} 找不到必要欄位`);
   const headers = rows[headerIndex].map(normalizeHeader);
-  return rows.slice(headerIndex + 1).map(row => Object.fromEntries(required.map(key => [key, (row[headers.indexOf(key)] || "").trim()])))
+  const fields = [...required, ...(CONFIG[type].optional || [])];
+  return rows.slice(headerIndex + 1).map(row => Object.fromEntries(fields.map(key => [key, headers.includes(key) ? (row[headers.indexOf(key)] || "").trim() : ""])))
     .filter(item => item["姓名"] || item["編號"]);
 }
 
@@ -65,6 +75,52 @@ async function loadImage(source) {
   }
 }
 
+const savedTemplateKey = key => `zilong-template-${key}`;
+const readSavedTemplate = key => localStorage.getItem(savedTemplateKey(key)) || "";
+const fileToDataUrl = file => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result));
+  reader.onerror = () => reject(new Error("底圖讀取失敗"));
+  reader.readAsDataURL(file);
+});
+
+function refreshTemplateSelect(key, preferSaved = false) {
+  const select = $(`#${key}-select`), saved = readSavedTemplate(key);
+  const current = preferSaved && saved ? "saved" : (select.value || "default");
+  select.innerHTML = `<option value="default">圖1｜預設底圖</option>${saved ? '<option value="saved">圖2｜已儲存底圖</option>' : ""}${templateSession[key] ? '<option value="session">本次新底圖</option>' : ""}`;
+  select.value = [...select.options].some(option => option.value === current) ? current : (templateSession[key] ? "session" : "default");
+}
+
+function currentTemplateSource(key) {
+  const selected = $(`#${key}-select`).value;
+  if (selected === "session" && templateSession[key]) return templateSession[key];
+  if (selected === "saved" && readSavedTemplate(key)) return readSavedTemplate(key);
+  return TEMPLATE_CONFIG[key].defaultUrl;
+}
+
+async function handleTemplateUpload(key, file) {
+  if (!file) return;
+  const dataUrl = await fileToDataUrl(file);
+  templateSession[key] = dataUrl;
+  let saved = false;
+  if (confirm("是否儲存這張新底圖？儲存後，下次開啟網站仍可選擇使用。")) {
+    const old = readSavedTemplate(key);
+    if (!old || confirm("目前已有圖2。按『確定』覆蓋舊圖2；按『取消』則只在本次使用新底圖。")) {
+      localStorage.setItem(savedTemplateKey(key), dataUrl);
+      saved = true;
+    }
+  }
+  refreshTemplateSelect(key, saved);
+  if (!saved) $(`#${key}-select`).value = "session";
+}
+
+function showTemplatePreview(key) {
+  const dialog = $("#template-preview");
+  $("#preview-title").textContent = TEMPLATE_CONFIG[key].label;
+  $("#preview-image").src = currentTemplateSource(key);
+  dialog.showModal();
+}
+
 function canvasFromImage(image) {
   const canvas = document.createElement("canvas");
   canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
@@ -74,12 +130,71 @@ function canvasFromImage(image) {
 
 function shiftedSubstituteCanvas(image) {
   const canvas = document.createElement("canvas");
-  canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
-  const ctx = canvas.getContext("2d"), shift = Math.round(canvas.height * 76 / 1474);
+  canvas.width = 562; canvas.height = 1474;
+  const ctx = canvas.getContext("2d");
   ctx.fillStyle = "white"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(image, 2, 2, canvas.width - 4, canvas.height - shift - 4, 2, shift + 2, canvas.width - 4, canvas.height - shift - 4);
+  ctx.drawImage(image, 2, 2, image.naturalWidth - 4, Math.min(403, image.naturalHeight - 4), 2, 88, canvas.width - 4, 403);
   ctx.strokeStyle = "#7b3c16"; ctx.lineWidth = 2; ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
   return canvas;
+}
+
+function substituteTokens(text) {
+  return String(text || "").match(/\d+|[A-Za-z]|\s+|[^\dA-Za-z\s]/gu) || [];
+}
+
+function drawVerticalSubstitute(canvas, text, centerX, topY, bottomY, requestedSize = 56) {
+  const ctx = canvas.getContext("2d"), parts = substituteTokens(text), gap = 5;
+  let size = requestedSize;
+  const heightsFor = value => value.map(part => part.trim() === "" || part === "(" || part === ")" ? Math.round(size * .55) : size);
+  let heights = heightsFor(parts);
+  while (size > 20 && heights.reduce((a, b) => a + b, 0) + gap * Math.max(0, parts.length - 1) > bottomY - topY) {
+    size--; heights = heightsFor(parts);
+  }
+  ctx.fillStyle = "#310700"; ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+  let y = topY;
+  parts.forEach((part, index) => {
+    const height = heights[index];
+    if (!part.trim()) { y += height + gap; return; }
+    if (part === "(" || part === ")") {
+      const arcW = 30, arcH = 9, left = centerX - arcW / 2, top = y + (height - arcH) / 2;
+      ctx.beginPath();
+      if (part === "(") ctx.ellipse(centerX, top + arcH, arcW / 2, arcH, 0, Math.PI, Math.PI * 2);
+      else ctx.ellipse(centerX, top, arcW / 2, arcH, 0, 0, Math.PI);
+      ctx.lineWidth = 3; ctx.strokeStyle = "#310700"; ctx.stroke();
+      y += height + gap; return;
+    }
+    let tokenSize = size;
+    ctx.font = `400 ${tokenSize}px "Noto Sans TC", sans-serif`;
+    while (/^\d+$/.test(part) && tokenSize > 16 && ctx.measureText(part).width > 86) {
+      tokenSize--; ctx.font = `400 ${tokenSize}px "Noto Sans TC", sans-serif`;
+    }
+    const metrics = ctx.measureText(part), width = metrics.width;
+    const actualHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
+    ctx.fillText(part, centerX - width / 2, y + (height - actualHeight) / 2 + metrics.actualBoundingBoxAscent);
+    y += height + gap;
+  });
+}
+
+function drawRotatedSubstituteLine(canvas, text, centerX, topY, maxLength, requestedSize) {
+  const target = canvas.getContext("2d"), scratch = document.createElement("canvas"), measure = scratch.getContext("2d");
+  let size = requestedSize;
+  do {
+    measure.font = `400 ${size}px "Noto Sans TC", sans-serif`;
+    if (measure.measureText(text).width <= maxLength || size <= 18) break;
+    size--;
+  } while (true);
+  const metrics = measure.measureText(text), width = Math.ceil(metrics.width), height = Math.ceil(size * 1.35);
+  scratch.width = width + 20; scratch.height = height + 10;
+  const ctx = scratch.getContext("2d");
+  ctx.font = `400 ${size}px "Noto Sans TC", sans-serif`; ctx.fillStyle = "#310700"; ctx.textBaseline = "middle";
+  ctx.fillText(text, 10, scratch.height / 2);
+  target.save(); target.translate(centerX, topY); target.rotate(Math.PI / 2); target.drawImage(scratch, 0, -scratch.height / 2); target.restore();
+}
+
+function normalizedSubstituteNumber(value, gender) {
+  let number = String(value || "").trim();
+  number = number.replace(/^\s*[（(]\s*[男女]\s*[）)]\s*-?\s*/u, "").replace(/^[-－]+/, "").trim();
+  return `編號：(${gender})-${number}`;
 }
 
 function fitFont(ctx, text, maxSize, minSize, maxWidth, weight = 400) {
@@ -128,27 +243,36 @@ function drawRotatedLines(canvas, text, box, options = {}) {
 }
 
 function drawSubstituteName(canvas, name) {
-  const ctx = canvas.getContext("2d"), box = [.25, .34, .75, .91];
-  if (/[A-Za-z]/.test(name)) return drawRotatedLines(canvas, name, box, { fontRatio: .09, minFontRatio: .055, maxLines: 1, weight: 800 });
-  const chars = [...normalizePerson(name)], x0 = box[0] * canvas.width, y0 = box[1] * canvas.height, x1 = box[2] * canvas.width, y1 = box[3] * canvas.height;
-  const max = .15 * canvas.height, min = .085 * canvas.height, gap = .018 * canvas.height;
-  const size = Math.max(min, Math.min(max, (x1 - x0) * .9, ((y1 - y0) - gap * Math.max(0, chars.length - 1)) / chars.length));
+  const ctx = canvas.getContext("2d");
+  if (/[A-Za-z]/.test(name)) return drawRotatedSubstituteLine(canvas, name, 281, 535, 790, 110);
+  const chars = [...normalizePerson(name)];
+  if (!chars.length) return;
+  const top = 520, bottom = 1340;
+  const centers = chars.length === 3 ? [624, 935, 1236] : chars.map((_, index) => top + (index + .5) * (bottom - top) / chars.length);
+  const maxByCount = Math.floor((bottom - top) / chars.length * .86);
+  const size = Math.min(235, maxByCount);
   ctx.font = `800 ${size}px "Noto Sans TC", sans-serif`; ctx.fillStyle = "#310700"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  const first = y0 + size * .52, last = y1 - size * .52;
-  chars.forEach((char, i) => ctx.fillText(char, (x0 + x1) / 2, chars.length === 1 ? (y0 + y1) / 2 : first + i * (last - first) / (chars.length - 1)));
+  chars.forEach((char, index) => ctx.fillText(char, 281, centers[index]));
 }
 
 async function renderSubstitute(row, gender, template) {
-  const canvas = shiftedSubstituteCanvas(template), hour = String(row["出生時辰"] || "").trim().slice(0, 1), dy = 76 / 1474;
-  const name = normalizePerson(row["姓名"]), address = `地址：${normalizePerson(row["地址"])}`;
-  const numberText = `編號：(${gender})-${String(row["編號"] || "").trim()}`;
+  const canvas = shiftedSubstituteCanvas(template), hour = String(row["出生時辰"] || "").trim().slice(0, 1);
+  const name = normalizePerson(row["姓名"]), rawAddress = normalizePerson(row["地址"]);
+  const numberText = normalizedSubstituteNumber(row["編號"], gender);
   const ctx = canvas.getContext("2d");
-  const numberSize = fitFont(ctx, numberText, Math.round(canvas.height * 54 / 1474), Math.round(canvas.height * 40 / 1474), canvas.width * .86, 800);
+  const numberSize = fitFont(ctx, numberText, 58, 36, 510, 800);
   ctx.font = `800 ${numberSize}px "Noto Sans TC", sans-serif`; ctx.fillStyle = "#310700"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillText(numberText, canvas.width / 2, canvas.height * 54 / 1474);
+  ctx.fillText(numberText, 281, 58);
   drawSubstituteName(canvas, name);
-  drawRotatedLines(canvas, `農：${String(row["農曆生日"] || "").replace(/\s+/g, "")}${hour ? `(${hour})` : ""}`, [.035,.03+dy,.23,.67+dy], { fontRatio:.046,minFontRatio:.034,maxLines:2 });
-  drawRotatedLines(canvas, address, [.73,.03+dy,.965,.90+dy], { fontRatio:.044,minFontRatio:.032,maxLines:2 });
+  drawVerticalSubstitute(canvas, `農：${String(row["農曆生日"] || "").replace(/\s+/g, "")}${hour ? `(${hour})` : ""}`, 62, 140, 1225, 56);
+  if (/[A-Za-z]/.test(rawAddress)) {
+    drawVerticalSubstitute(canvas, "地址：", 500, 140, 330, 56);
+    drawRotatedSubstituteLine(canvas, rawAddress, 500, 315, 1050, 44);
+  } else {
+    drawVerticalSubstitute(canvas, `地址：${rawAddress}`, 500, 140, 1225, 56);
+  }
+  const note = normalizePerson(row["備註"]);
+  if (note) drawRotatedSubstituteLine(canvas, `(${note})`, 140, 515, 500, 44);
   return canvasToBytes(canvas);
 }
 
@@ -194,24 +318,37 @@ function history(type){
 }
 function saveHistory(type,value){localStorage.setItem(`ziling-${type}-fingerprints`,JSON.stringify(value));}
 function fingerprint(type,sheet,row){
-  const fields=CONFIG[type].required;
+  const fields=[...CONFIG[type].required,...(CONFIG[type].optional||[])];
   const content=JSON.stringify([sheet,...fields.map(field=>normalizePerson(row[field]))]);
   let hash=2166136261;
   for(let i=0;i<content.length;i++){hash^=content.charCodeAt(i);hash=Math.imul(hash,16777619);}
   return (hash>>>0).toString(16).padStart(8,"0");
 }
 
+function selectedSheets(type) {
+  if (type !== "lamp") return CONFIG[type].sheets;
+  return $$('input[name="lamp-sheet"]:checked').map(input => input.value);
+}
+
+function showGenerationComplete(message) {
+  if (confirm(`${message}\n\n是否要前往 Google 試算表關閉公開權限？`)) {
+    window.open(PERMISSION_URL, "_blank", "noopener,noreferrer");
+  }
+}
+
 async function run(type, mode) {
   const status=$(`#status-${type}`),buttons=$$(`[data-type="${type}"]`);buttons.forEach(b=>b.disabled=true);status.className="status busy";status.textContent="正在讀取試算表…";
   try {
     await document.fonts.load('800 80px "Noto Sans TC"'); await document.fonts.ready;
-    const all=[];for(const sheet of CONFIG[type].sheets){const rows=await fetchRows(type,sheet);all.push({sheet,rows});status.textContent+=`\n${sheet}：${rows.length} 筆`;}
+    const sheets=selectedSheets(type);
+    if(!sheets.length) throw new Error("請至少勾選一個要產生的燈種");
+    const all=[];for(const sheet of sheets){const rows=await fetchRows(type,sheet);all.push({sheet,rows});status.textContent+=`\n${sheet}：${rows.length} 筆`;}
     if(mode==="test"){status.className="status success";status.textContent+=`\n資料與欄位檢查成功，共 ${all.reduce((n,x)=>n+x.rows.length,0)} 筆。`;return;}
     if(mode==="all" && !confirm("確定要重新產生目前試算表中的全部資料嗎？")){status.className="status";status.textContent="已取消重新產生全部資料。";return;}
     const existing=existingNames(type),records=history(type),files=[];let skipped=0,failed=0;
     let templates;
-    if(type==="substitute")templates={男:await loadImage($("#sub-male-template").files[0]||"/assets/男替身底圖.jpg"),女:await loadImage($("#sub-female-template").files[0]||"/assets/女替身底圖.jpg")};
-    else templates={lamp:await loadImage($("#lamp-template").files[0]||"/assets/安燈小卡底圖.jpg")};
+    if(type==="substitute")templates={男:await loadImage(currentTemplateSource("sub-male")),女:await loadImage(currentTemplateSource("sub-female"))};
+    else templates={lamp:await loadImage(currentTemplateSource("lamp"))};
     for(const group of all){for(const row of group.rows){
       const filename=`${safeName([row["編號"],row["姓名"]].filter(Boolean).join("-")||"未命名")}.jpg`;
       const folder=type==="substitute"?(group.sheet.includes("男")?"男":"女"):group.sheet;
@@ -219,11 +356,24 @@ async function run(type, mode) {
       if(mode==="changed" && (previous===signature || (!previous && hasExisting(existing,key,filename)))){skipped++;continue;}
       try{let data;if(type==="substitute"){const gender=group.sheet.includes("男")?"男":"女";data=await renderSubstitute(row,gender,templates[gender]);}else data=await renderLamp(row,group.sheet,templates.lamp);files.push({name:key,data});records[key]=signature;status.textContent=`正在產生圖片… ${files.length} 張`;await new Promise(r=>setTimeout(r,0));}catch(error){failed++;console.error(error);}
     }}
-    if(!files.length){status.className="status success";status.textContent=`沒有新圖片需要產生；略過 ${skipped} 張。`;return;}
+    if(!files.length){status.className="status success";status.textContent=`沒有新圖片需要產生；略過 ${skipped} 張。`;showGenerationComplete("檢查完成，沒有新圖片需要產生。");return;}
     download(makeZip(files),`${type==='substitute'?'祭改替身':'安燈小卡'}_${new Date().toISOString().slice(0,10)}.zip`);saveHistory(type,records);status.className="status success";status.textContent=`完成：下載 ${files.length} 張，略過 ${skipped} 張，失敗 ${failed} 張。`;
+    showGenerationComplete(`已成功生成 ${files.length} 張圖片。`);
   } catch(error){status.className="status error";status.textContent=`執行失敗：${error.message}`;}
   finally{buttons.forEach(b=>b.disabled=false);}
 }
 
 $$('.tab').forEach(button=>button.addEventListener('click',()=>{$$('.tab').forEach(b=>b.classList.toggle('active',b===button));$$('.panel').forEach(p=>p.classList.toggle('active',p.id===`panel-${button.dataset.tab}`));}));
 $$('[data-action]').forEach(button=>button.addEventListener('click',()=>run(button.dataset.type,button.dataset.action==='test'?'test':button.dataset.action==='generate-all'?'all':'changed')));
+
+Object.keys(TEMPLATE_CONFIG).forEach(key => {
+  refreshTemplateSelect(key, Boolean(readSavedTemplate(key)));
+  $(`[data-view-template="${key}"]`).addEventListener("click", () => showTemplatePreview(key));
+  $(`[data-upload-template="${key}"]`).addEventListener("click", () => $(`#${key}-template`).click());
+  $(`#${key}-template`).addEventListener("change", async event => {
+    try { await handleTemplateUpload(key, event.target.files[0]); }
+    catch (error) { alert(`上傳底圖失敗：${error.message}`); }
+    event.target.value = "";
+  });
+});
+$("#template-preview .dialog-close").addEventListener("click", () => $("#template-preview").close());

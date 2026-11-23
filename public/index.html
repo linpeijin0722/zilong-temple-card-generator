@@ -12,7 +12,7 @@
 </head>
 <body>
   <header class="hero">
-    <div class="brand-mark">龍</div>
+    <img class="brand-mark" src="/assets/子龍廟LOGO.png" alt="台北子龍廟神像" />
     <div>
       <p class="eyebrow">台北子龍廟</p>
       <h1>線上圖卡產生器</h1>
@@ -36,21 +36,28 @@
         <div class="icon-card">替</div>
       </div>
       <div class="form-grid">
-        <label class="field">
+        <div class="field template-field" data-template="sub-male">
           <span>男替身底圖</span>
-          <input type="file" id="sub-male-template" accept="image/*" />
-          <small>預設已內建，可選擇其他圖片覆蓋</small>
-        </label>
-        <label class="field">
+          <select class="template-select" id="sub-male-select" aria-label="選擇男替身底圖"></select>
+          <div class="template-actions">
+            <button type="button" class="secondary" data-view-template="sub-male">查看目前底圖</button>
+            <button type="button" class="secondary" data-upload-template="sub-male">上傳新底圖</button>
+          </div>
+          <input class="hidden-file" type="file" id="sub-male-template" accept="image/*" />
+        </div>
+        <div class="field template-field" data-template="sub-female">
           <span>女替身底圖</span>
-          <input type="file" id="sub-female-template" accept="image/*" />
-          <small>預設已內建，可選擇其他圖片覆蓋</small>
-        </label>
+          <select class="template-select" id="sub-female-select" aria-label="選擇女替身底圖"></select>
+          <div class="template-actions">
+            <button type="button" class="secondary" data-view-template="sub-female">查看目前底圖</button>
+            <button type="button" class="secondary" data-upload-template="sub-female">上傳新底圖</button>
+          </div>
+          <input class="hidden-file" type="file" id="sub-female-template" accept="image/*" />
+        </div>
       </div>
       <label class="folder-field">
         <span>匯入既有輸出資料夾（選填）</span>
         <input type="file" id="sub-existing" webkitdirectory multiple />
-        <small>網站只比對檔名，不會上傳檔案內容</small>
       </label>
       <div class="actions">
         <button class="secondary" data-action="test" data-type="substitute">測試資料</button>
@@ -69,15 +76,29 @@
         </div>
         <div class="icon-card">燈</div>
       </div>
-      <label class="field wide">
+      <div class="lamp-picker" aria-labelledby="lamp-picker-title">
+        <span id="lamp-picker-title">選擇要產生的燈種（可複選）</span>
+        <div class="lamp-options">
+          <label><input type="checkbox" name="lamp-sheet" value="安太歲" checked />安太歲</label>
+          <label><input type="checkbox" name="lamp-sheet" value="平安燈" checked />平安燈</label>
+          <label><input type="checkbox" name="lamp-sheet" value="光明燈" checked />光明燈</label>
+          <label><input type="checkbox" name="lamp-sheet" value="文昌燈" checked />文昌燈</label>
+          <label><input type="checkbox" name="lamp-sheet" value="開運燈" checked />開運燈</label>
+          <label><input type="checkbox" name="lamp-sheet" value="姻緣燈" checked />姻緣燈</label>
+        </div>
+      </div>
+      <div class="field wide template-field" data-template="lamp">
         <span>安燈小卡底圖</span>
-        <input type="file" id="lamp-template" accept="image/*" />
-        <small>預設已內建，可選擇其他圖片覆蓋</small>
-      </label>
+        <select class="template-select" id="lamp-select" aria-label="選擇安燈小卡底圖"></select>
+        <div class="template-actions">
+          <button type="button" class="secondary" data-view-template="lamp">查看目前底圖</button>
+          <button type="button" class="secondary" data-upload-template="lamp">上傳新底圖</button>
+        </div>
+        <input class="hidden-file" type="file" id="lamp-template" accept="image/*" />
+      </div>
       <label class="folder-field">
         <span>匯入既有輸出資料夾（選填）</span>
         <input type="file" id="lamp-existing" webkitdirectory multiple />
-        <small>網站只比對檔名，不會上傳檔案內容</small>
       </label>
       <div class="actions">
         <button class="secondary" data-action="test" data-type="lamp">測試資料</button>
@@ -94,6 +115,14 @@
   </main>
 
   <footer>台北子龍廟｜線上圖卡工具</footer>
+
+  <dialog id="template-preview">
+    <div class="preview-head">
+      <strong id="preview-title">目前底圖</strong>
+      <button type="button" class="dialog-close" aria-label="關閉">關閉</button>
+    </div>
+    <img id="preview-image" alt="目前使用的底圖" />
+  </dialog>
   <script type="module" src="/app.js"></script>
 </body>
 </html>
